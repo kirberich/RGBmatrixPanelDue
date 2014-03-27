@@ -6,17 +6,32 @@ uint8_t RGBmatrixPanelDue::width() {return WIDTH; }
 
 uint8_t RGBmatrixPanelDue::height() {return HEIGHT; }
 
+RGBmatrixPanelDue::RGBmatrixPanelDue(uint8_t matrix_type, uint8_t xpanels, uint8_t ypanels, uint8_t planes) {
+  single_matrix_width = 32;
+  single_matrix_height = matrix_type == MATRIX_32_32 ? 32 : 16;
+  init(xpanels, ypanels, planes);
+}
 
 RGBmatrixPanelDue::RGBmatrixPanelDue(uint8_t xpanels, uint8_t ypanels, uint8_t planes) {
+  // Keep old constructor for backwards compability, assuming 16x32 matrix
+  single_matrix_width = 32;
+  single_matrix_height = 16;
+  init(xpanels, ypanels, planes);
+}
 
+void RGBmatrixPanelDue::init(uint8_t xpanels, uint8_t ypanels, uint8_t planes) {
   NX = xpanels;
   NY = ypanels;
 
   PWMBITS = planes;
   PWMMAX = ((1 << PWMBITS) - 1);
 
+  // Save number of sections once because dividing by two is oh so expensive
+  sections = single_matrix_height/2;
+
   WIDTH = single_matrix_width*xpanels;
   HEIGHT = single_matrix_height*ypanels;
+
   NUMBYTES = (WIDTH * HEIGHT / 2) * planes;
   matrixbuff = (uint8_t *)malloc(NUMBYTES);
   // set all of matrix buff to 0 to begin with
@@ -32,7 +47,6 @@ RGBmatrixPanelDue::RGBmatrixPanelDue(uint8_t xpanels, uint8_t ypanels, uint8_t p
 
 }
 
-
 void RGBmatrixPanelDue::begin(uint32_t frequency) {
   pinMode(APIN, OUTPUT);
   digitalWrite(APIN, LOW); 
@@ -40,6 +54,8 @@ void RGBmatrixPanelDue::begin(uint32_t frequency) {
   digitalWrite(BPIN, LOW); 
   pinMode(CPIN, OUTPUT);
   digitalWrite(CPIN, LOW); 
+  pinMode(DPIN, OUTPUT); // Only applies to 32x32 matrix
+  digitalWrite(DPIN, LOW); 
   pinMode(LAT, OUTPUT);
   digitalWrite(LAT, LOW); 
   pinMode(CLK, OUTPUT);
@@ -122,10 +138,10 @@ void  RGBmatrixPanelDue::drawPixel(uint8_t xin, uint8_t yin, uint16_t c) {
   y = yin%single_matrix_height;
 
   // both top and bottom are stored in same byte
-  if (y%single_matrix_height < 8) 
+  if (y%single_matrix_height < sections) 
     index = y%single_matrix_height;
   else 
-  index = y%single_matrix_height-8;
+  index = y%single_matrix_height-sections;
   // now multiply this y by the # of pixels in a row
   index *= single_matrix_width*NX*NY;
   // now, add the x value of the row
@@ -135,7 +151,7 @@ void  RGBmatrixPanelDue::drawPixel(uint8_t xin, uint8_t yin, uint16_t c) {
 
 
   old = matrixbuff[index];
-  if (y%single_matrix_height < 8) {
+  if (y%single_matrix_height < sections) {
     // we're going to replace the high nybbles only
     // red first!
     matrixbuff[index] &= ~0xF0;  // mask off top 4 bits
@@ -395,8 +411,12 @@ void RGBmatrixPanelDue::writeSection(uint8_t secn, uint8_t *buffptr) {
     portCstatus |= 0x0008;
     portCstatus_nonclk |= 0x0008;
     oeLow |= 0x0008;
-   
   }
+  if (secn & 0x8){ // Dpin
+    portCstatus |= 0x0080;
+    portCstatus_nonclk |= 0x0080;
+    oeLow |= 0x0080;
+  } 
   REG_PIOC_ODSR = portCstatus; // set A, B, C pins
  
   uint8_t  low, high;
@@ -456,7 +476,7 @@ void RGBmatrixPanelDue::writeSection(uint8_t secn, uint8_t *buffptr) {
 void  RGBmatrixPanelDue::updateDisplay(void) {
   writeSection(scansection, matrixbuff + (PWMBITS*single_matrix_width*NX*NY*scansection));  
   scansection++;
-  if (scansection == 8) { 
+  if (scansection == sections) { 
     scansection = 0;
     pwmcounter++;
     if (pwmcounter == PWMMAX) { pwmcounter = 0; }

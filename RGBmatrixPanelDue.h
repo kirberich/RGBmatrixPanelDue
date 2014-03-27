@@ -12,13 +12,15 @@
 //#define NUMBYTES (WIDTH * HEIGHT / 2) * 3  // use 1.5 bytes (12 bits) per pixel
 //#endif 
 
-#define single_matrix_height 16
-#define single_matrix_width 32
+// Matrix types
+#define MATRIX_16_32 0
+#define MATRIX_32_32 1
 
 // fixed pin structure for now
-#define APIN     33
-#define BPIN     34
-#define CPIN     35
+#define APIN  33
+#define BPIN  34
+#define CPIN  35
+#define DPIN  39 // 32x32 Matrix only
 #define LAT   38
 #define OE    36
 #define CLK   37
@@ -34,7 +36,9 @@
 
 class RGBmatrixPanelDue {
  public:
+  RGBmatrixPanelDue(uint8_t matrix_type, uint8_t xpanels, uint8_t ypanels, uint8_t planes);
   RGBmatrixPanelDue(uint8_t xpanels, uint8_t ypanels, uint8_t planes);
+  void init(uint8_t xpanels, uint8_t ypanels, uint8_t planes);
   void begin(uint32_t freq);
   uint16_t Color333(uint8_t r, uint8_t g, uint8_t b);
   uint16_t Color444(uint8_t r, uint8_t g, uint8_t b);
@@ -65,6 +69,8 @@ class RGBmatrixPanelDue {
 
  private:
 
+  uint8_t single_matrix_width, single_matrix_height;
+  uint8_t sections;
   uint8_t WIDTH, HEIGHT;//, PWMMAX, PWMBITS;
   uint32_t NUMBYTES;
 
